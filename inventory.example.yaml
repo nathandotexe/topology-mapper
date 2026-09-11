@@ -1,0 +1,23 @@
+# Optional inventory: per-device / global connection overrides for discovery.
+# Precedence (low -> high):
+#   Netmiko defaults  <  environment (.env)  <  defaults:  <  devices.<host>:
+#
+#   topo-mapper discover --inventory inventory.yaml
+
+defaults:
+  device_type: cisco_ios
+  fast_cli: true
+  # username: netadmin       # prefer TOPO_USERNAME in .env
+  # password: ...            # prefer TOPO_PASSWORD in .env
+
+# Seed devices to start the walk from (used if --seed / TOPO_SEEDS are absent):
+seeds:
+  - 10.0.0.1
+
+# Keyed by the address you connect to (the mgmt IP CDP/LLDP advertises):
+devices:
+  10.0.0.20:
+    device_type: cisco_xe
+  10.0.0.30:
+    device_type: arista_eos
+    port: 2222

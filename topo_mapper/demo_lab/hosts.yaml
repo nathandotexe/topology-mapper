@@ -1,0 +1,12 @@
+# Bundled mock lab for `topo-mapper demo`.
+# Maps the management addresses that appear in CDP/LLDP output to a directory
+# of captured `show` command output. Anything not listed here is "unreachable".
+seeds:
+  - 10.0.0.1
+map:
+  10.0.0.1: core1
+  10.0.0.2: dist1
+  10.0.0.3: dist2
+  10.0.0.4: access1
+  10.0.0.5: access2
+  # 10.0.0.254 (edge-fw) is intentionally absent -> demonstrates a partial node

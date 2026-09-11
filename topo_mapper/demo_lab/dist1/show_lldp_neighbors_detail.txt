@@ -1,0 +1,52 @@
+------------------------------------------------
+Local Intf: Gi0/1
+Chassis id: 5000.0001.0000
+Port id: Gi0/0
+Port Description: GigabitEthernet0/0
+System Name: core1.lab.local
+
+System Description:
+Cisco IOS Software, vios_l2 Software (vios_l2-ADVENTERPRISEK9-M), Version 15.2
+
+Time remaining: 95 seconds
+System Capabilities: B,R
+Enabled Capabilities: B,R
+Management Addresses:
+    IP: 10.0.0.1
+Auto Negotiation - supported, enabled
+
+------------------------------------------------
+Local Intf: Gi0/3
+Chassis id: 5000.0003.0000
+Port id: Gi0/3
+Port Description: GigabitEthernet0/3
+System Name: dist2.lab.local
+
+System Description:
+Cisco IOS Software, vios_l2 Software (vios_l2-ADVENTERPRISEK9-M), Version 15.2
+
+Time remaining: 108 seconds
+System Capabilities: B,R
+Enabled Capabilities: B
+Management Addresses:
+    IP: 10.0.0.3
+Auto Negotiation - supported, enabled
+
+------------------------------------------------
+Local Intf: Gi0/2
+Chassis id: 5000.0004.0000
+Port id: Gi0/1
+Port Description: GigabitEthernet0/1
+System Name: access1.lab.local
+
+System Description:
+Cisco IOS Software, vios_l2 Software (vios_l2-ADVENTERPRISEK9-M), Version 15.2
+
+Time remaining: 113 seconds
+System Capabilities: B,R
+Enabled Capabilities: B
+Management Addresses:
+    IP: 10.0.0.4
+Auto Negotiation - supported, enabled
+
+Total entries displayed: 3

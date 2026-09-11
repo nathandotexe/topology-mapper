@@ -1,0 +1,5 @@
+# Core runtime dependencies. For the web viewer also: pip install 'topo-mapper[web]'
+netmiko>=4.3.0
+networkx>=3.2
+PyYAML>=6.0
+python-dotenv>=1.0.0

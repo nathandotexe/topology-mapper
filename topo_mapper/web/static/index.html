@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Topo Mapper</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1420; --panel: #171e2e; --border: #2a3350; --text: #e6e9f2;
+    --muted: #9aa4bf; --accent: #4c9be8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font: 14px/1.5 system-ui, sans-serif;
+    background: var(--bg); color: var(--text); }
+  #app { display: grid; grid-template-columns: 1fr 320px; grid-template-rows: auto 1fr;
+    height: 100%; }
+  header { grid-column: 1 / -1; display: flex; gap: 16px; align-items: center;
+    padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  header .stats { color: var(--muted); font-size: 13px; }
+  header .spacer { flex: 1; }
+  button, select { background: #202a41; color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 10px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  #cy { width: 100%; height: 100%; }
+  aside { border-left: 1px solid var(--border); background: var(--panel); padding: 14px 16px;
+    overflow-y: auto; }
+  aside h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--muted); margin: 0 0 8px; }
+  .kv { display: grid; grid-template-columns: 90px 1fr; gap: 4px 8px; font-size: 13px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; word-break: break-word; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; font-size: 12px;
+    color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .empty { color: var(--muted); font-style: italic; }
+  code { background: #202a41; padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Topo Mapper</h1>
+    <span class="stats" id="stats">loading…</span>
+    <span class="spacer"></span>
+    <label>layout
+      <select id="layout">
+        <option value="cose">cose</option>
+        <option value="breadthfirst">breadthfirst</option>
+        <option value="circle">circle</option>
+        <option value="grid">grid</option>
+        <option value="concentric">concentric</option>
+      </select>
+    </label>
+    <button id="refresh">refresh</button>
+    <button id="fit">fit</button>
+  </header>
+  <div id="cy"></div>
+  <aside>
+    <h2>Details</h2>
+    <div id="details"><p class="empty">Click a node or link.</p></div>
+    <div class="legend">
+      <span><i class="dot" style="background:#f2a154"></i>router</span>
+      <span><i class="dot" style="background:#8e5bd9"></i>l3-switch</span>
+      <span><i class="dot" style="background:#4c9be8"></i>switch</span>
+      <span><i class="dot" style="background:#57b894"></i>endpoint</span>
+      <span><i class="dot" style="background:#8a8a8a"></i>unknown</span>
+      <span><i class="dot" style="background:#d64545"></i>unreachable</span>
+    </div>
+  </aside>
+</div>
+
+<script>
+const BOOTSTRAP = null;
+const ROLE_COLORS = { router:"#f2a154", "l3-switch":"#8e5bd9", switch:"#4c9be8",
+  endpoint:"#57b894", unknown:"#8a8a8a" };
+
+const style = [
+  { selector: "node", style: {
+      "label": "data(label)", "color": "#e6e9f2", "font-size": 11,
+      "text-valign": "bottom", "text-margin-y": 4,
+      "background-color": ele => ele.data("failed") ? "#3a2030" : (ROLE_COLORS[ele.data("role")] || ROLE_COLORS.unknown),
+      "border-width": ele => ele.data("failed") ? 2 : (ele.data("reachable") ? 0 : 2),
+      "border-color": ele => ele.data("failed") ? "#d64545" : "#7f8db3",
+      "border-style": ele => ele.data("reachable") ? "solid" : "dashed",
+      "width": 34, "height": 34,
+  }},
+  { selector: "edge", style: {
+      "curve-style": "bezier", "width": 2,
+      "line-color": ele => ele.data("status") === "down" ? "#d64545" : "#5b6688",
+      "line-style": ele => ele.data("status") === "down" ? "dashed" : "solid",
+      "label": "", "font-size": 9, "color": "#9aa4bf",
+      "text-rotation": "autorotate", "text-background-color": "#0f1420",
+      "text-background-opacity": 1, "text-background-padding": 2,
+  }},
+  { selector: "edge.show-label", style: { "label": "data(label)" } },
+  { selector: ":selected", style: { "border-color": "#ffffff", "border-width": 3,
+      "line-color": "#ffffff" } },
+];
+
+let cy;
+
+function layoutOpts(name) {
+  const base = { name, animate: true, padding: 30 };
+  if (name === "cose") return { ...base, idealEdgeLength: 120, nodeRepulsion: 9000 };
+  if (name === "breadthfirst") return { ...base, spacingFactor: 1.3, directed: false };
+  return base;
+}
+
+function renderDetails(data, kind) {
+  const el = document.getElementById("details");
+  const rows = [];
+  const add = (k, v) => { if (v !== undefined && v !== null && v !== "")
+    rows.push(`<dt>${k}</dt><dd>${Array.isArray(v) ? v.join(", ") : v}</dd>`); };
+  if (kind === "node") {
+    add("name", data.label); add("id", data.id); add("role", data.role);
+    add("mgmt ip", data.mgmt_ip); add("platform", data.platform);
+    add("reachable", String(data.reachable)); add("found via", data.discovered_via);
+    if (data.errors && data.errors.length) add("errors", data.errors);
+  } else {
+    add("link", `${data.source} ↔ ${data.target}`);
+    add(data.source, data.a_interface); add(data.target, data.b_interface);
+    add("protocols", data.protocols); add("status", data.status);
+  }
+  el.innerHTML = rows.length ? `<dl class="kv">${rows.join("")}</dl>`
+    : `<p class="empty">No attributes.</p>`;
+}
+
+function load(elements, meta) {
+  if (cy) cy.destroy();
+  cy = cytoscape({
+    container: document.getElementById("cy"),
+    elements, style,
+    layout: layoutOpts(document.getElementById("layout").value),
+  });
+  cy.on("tap", "node", e => renderDetails(e.target.data(), "node"));
+  cy.on("tap", "edge", e => renderDetails(e.target.data(), "edge"));
+  cy.on("mouseover", "edge", e => e.target.addClass("show-label"));
+  cy.on("mouseout", "edge", e => e.target.removeClass("show-label"));
+  const s = meta && meta.stats || {};
+  document.getElementById("stats").textContent =
+    `${s.devices ?? "?"} devices · ${s.reachable ?? "?"} reachable · ${s.links ?? "?"} links` +
+    (meta && meta.generated_at ? `  ·  ${meta.generated_at}` : "");
+}
+
+async function fetchAndLoad() {
+  if (BOOTSTRAP) { load(BOOTSTRAP.elements, BOOTSTRAP.meta); return; }
+  try {
+    const r = await fetch("api/topology");
+    const data = await r.json();
+    load(data.elements, data.meta);
+  } catch (err) {
+    document.getElementById("stats").textContent = "failed to load api/topology";
+    console.error(err);
+  }
+}
+
+document.getElementById("refresh").onclick = fetchAndLoad;
+document.getElementById("fit").onclick = () => cy && cy.fit(undefined, 30);
+document.getElementById("layout").onchange = () =>
+  cy && cy.layout(layoutOpts(document.getElementById("layout").value)).run();
+
+fetchAndLoad();
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "topo-mapper"
+version = "0.1.0"
+description = "Network topology auto-discovery via CDP/LLDP with a graph model and visualization"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "netmiko>=4.3.0",
+    "networkx>=3.2",
+    "PyYAML>=6.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+web = ["fastapi>=0.110", "uvicorn>=0.29"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+topo-mapper = "topo_mapper.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["topo_mapper*"]
+
+[tool.setuptools.package-data]
+"topo_mapper" = [
+    "web/static/*.html",
+    "demo_lab/hosts.yaml",
+    "demo_lab/*/*.txt",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

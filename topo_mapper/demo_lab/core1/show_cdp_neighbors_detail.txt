@@ -1,0 +1,42 @@
+-------------------------
+Device ID: dist1.lab.local
+Entry address(es):
+  IP address: 10.0.0.2
+Platform: cisco vios-l2,  Capabilities: Switch IGMP
+Interface: GigabitEthernet0/0,  Port ID (outgoing port): GigabitEthernet0/1
+Holdtime : 137 sec
+
+Version :
+Cisco IOS Software, vios_l2 Software (vios_l2-ADVENTERPRISEK9-M), Version 15.2
+
+advertisement version: 2
+Duplex: full
+
+-------------------------
+Device ID: dist2.lab.local
+Entry address(es):
+  IP address: 10.0.0.3
+Platform: cisco vios-l2,  Capabilities: Switch IGMP
+Interface: GigabitEthernet0/1,  Port ID (outgoing port): GigabitEthernet0/1
+Holdtime : 141 sec
+
+Version :
+Cisco IOS Software, vios_l2 Software (vios_l2-ADVENTERPRISEK9-M), Version 15.2
+
+advertisement version: 2
+Duplex: full
+
+-------------------------
+Device ID: edge-fw
+Entry address(es):
+  IP address: 10.0.0.254
+Platform: cisco CISCO2911/K9,  Capabilities: Router
+Interface: GigabitEthernet0/2,  Port ID (outgoing port): GigabitEthernet0/0
+Holdtime : 150 sec
+
+Version :
+Cisco IOS Software, C2900 Software (C2900-UNIVERSALK9-M), Version 15.7(3)M
+
+advertisement version: 2
+
+Total cdp entries displayed : 3

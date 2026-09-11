@@ -1,0 +1,33 @@
+services:
+  topo-mapper-discover:
+    build: .
+    image: topo-mapper:latest
+    entrypoint: ["/bin/sh", "/app/docker/discover-loop.sh"]
+    env_file:
+      - .env
+    environment:
+      DISCOVER_INTERVAL_SECONDS: "900"   # re-run discovery every 15 min
+    volumes:
+      - topo-data:/data
+      - ./docker/discover-loop.sh:/app/docker/discover-loop.sh:ro
+      # Uncomment after `cp inventory.example.yaml inventory.yaml`. Leaving this
+      # bind mount active with no such file makes Docker create an empty dir.
+      # - ./inventory.yaml:/app/inventory.yaml:ro
+    restart: unless-stopped
+    # Lab devices usually sit on a different subnet than the docker bridge.
+    # If discovery can't reach them, switch to: network_mode: host
+
+  topo-mapper-viewer:
+    build: .
+    image: topo-mapper:latest
+    command: ["serve", "--in", "/data/topology.json", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - topo-data:/data
+    restart: unless-stopped
+    depends_on:
+      - topo-mapper-discover
+
+volumes:
+  topo-data:

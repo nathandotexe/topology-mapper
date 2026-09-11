@@ -1,0 +1,5 @@
+Port      Name               Status       Vlan       Duplex  Speed Type
+Gi0/1                        connected    1          a-full a-1000 RJ45
+Gi0/2                        connected    20         a-full a-1000 RJ45
+Gi0/3                        connected    1          a-full a-1000 RJ45
+Gi0/11                       notconnect   1            auto   auto RJ45
