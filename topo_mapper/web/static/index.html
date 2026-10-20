@@ -7,162 +7,771 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.2/cytoscape.min.js"></script>
 <style>
   :root {
-    --bg: #0f1420; --panel: #171e2e; --border: #2a3350; --text: #e6e9f2;
-    --muted: #9aa4bf; --accent: #4c9be8;
+    --bg: #0a0f18; --panel: #111827; --panel-2: #172033; --panel-3: #1e2a42;
+    --border: #243049; --border-soft: rgba(143,154,181,.14);
+    --text: #e8ebf4; --muted: #8b96b2; --accent: #5aa7f0;
+    --up: #3ecf8e; --down: #f0565a; --unknown: #7a849c;
+    --glass: rgba(17,24,39,.78);
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; font: 14px/1.5 system-ui, sans-serif;
+  html, body { margin: 0; height: 100%; font: 14px/1.5 "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
     background: var(--bg); color: var(--text); }
-  #app { display: grid; grid-template-columns: 1fr 320px; grid-template-rows: auto 1fr;
-    height: 100%; }
-  header { grid-column: 1 / -1; display: flex; gap: 16px; align-items: center;
-    padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--panel); }
-  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
-  header .stats { color: var(--muted); font-size: 13px; }
+  #app { display: grid; grid-template-columns: 1fr 340px; grid-template-rows: auto 1fr; height: 100%; }
+
+  /* ---------------------------------------------------------------- header */
+  header { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
+    padding: 10px 18px; border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #131c2e, var(--panel)); }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand svg { flex: none; filter: drop-shadow(0 0 8px rgba(90,167,240,.45)); }
+  .brand h1 { font-size: 15px; margin: 0; font-weight: 700; letter-spacing: .01em; line-height: 1.15; }
+  .brand small { display: block; font-size: 11px; color: var(--muted); font-weight: 500; }
+  .kpis { display: flex; flex-wrap: wrap; gap: 8px; }
+  .kpi { display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 10px; border-radius: 10px;
+    background: var(--panel-2); border: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+  .kpi b { color: var(--text); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .kpi i { width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--accent));
+    box-shadow: 0 0 8px var(--c, var(--accent)); }
+  .kpi.bad { border-color: rgba(240,86,90,.45); background: rgba(240,86,90,.08); }
+  .kpi.bad b { color: var(--down); }
+  .live { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted);
+    padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel-2); }
+  .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--up);
+    box-shadow: 0 0 0 0 rgba(62,207,142,.6); animation: beat 2s infinite; }
+  .live.static i { background: var(--unknown); animation: none; }
+  .live.error i { background: var(--down); animation: none; }
+  .live.tick i { animation: beat 2s infinite, flash .5s; }
+  @keyframes beat { 0% { box-shadow: 0 0 0 0 rgba(62,207,142,.55); }
+    70% { box-shadow: 0 0 0 8px rgba(62,207,142,0); } 100% { box-shadow: 0 0 0 0 rgba(62,207,142,0); } }
+  @keyframes flash { 50% { transform: scale(1.6); } }
   header .spacer { flex: 1; }
-  button, select { background: #202a41; color: var(--text); border: 1px solid var(--border);
-    border-radius: 6px; padding: 5px 10px; font: inherit; cursor: pointer; }
+  .controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .seg { display: inline-flex; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
+  .seg button { border: 0; background: transparent; padding: 4px 10px; border-radius: 6px; color: var(--muted); }
+  .seg button:hover { color: var(--text); }
+  .seg button[aria-pressed="true"] { background: var(--panel-3); color: var(--text);
+    box-shadow: inset 0 0 0 1px rgba(90,167,240,.4); }
+  button, select, input { background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 5px 11px; font: inherit; font-size: 13px; }
+  button { cursor: pointer; transition: border-color .15s, background .15s, color .15s; }
   button:hover { border-color: var(--accent); }
-  #cy { width: 100%; height: 100%; }
-  aside { border-left: 1px solid var(--border); background: var(--panel); padding: 14px 16px;
-    overflow-y: auto; }
-  aside h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em;
-    color: var(--muted); margin: 0 0 8px; }
-  .kv { display: grid; grid-template-columns: 90px 1fr; gap: 4px 8px; font-size: 13px; }
-  .kv dt { color: var(--muted); }
-  .kv dd { margin: 0; word-break: break-word; }
-  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; font-size: 12px;
-    color: var(--muted); }
-  .legend span { display: inline-flex; align-items: center; gap: 5px; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-  .empty { color: var(--muted); font-style: italic; }
-  code { background: #202a41; padding: 1px 5px; border-radius: 4px; }
+  button:disabled { opacity: .4; cursor: default; border-color: var(--border); }
+  button.toggle[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+
+  /* ----------------------------------------------------------------- stage */
+  #stage { position: relative; overflow: hidden;
+    background:
+      radial-gradient(ellipse at 50% 40%, rgba(90,167,240,.10), transparent 62%),
+      radial-gradient(ellipse at 85% 100%, rgba(162,116,240,.07), transparent 50%),
+      radial-gradient(rgba(143,154,181,.13) 1px, transparent 1px) 0 0 / 24px 24px,
+      var(--bg); }
+  #stage::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+    box-shadow: inset 0 0 120px rgba(0,0,0,.55); }
+  #cy { position: absolute; inset: 0; }
+  .hud { position: absolute; z-index: 3; background: var(--glass); border: 1px solid var(--border);
+    border-radius: 12px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+  .hud.search { top: 14px; left: 14px; display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; }
+  .hud.search input { border: 0; background: transparent; padding: 4px 2px; width: 180px; outline: none; }
+  .hud.search kbd { font: 11px ui-monospace, monospace; color: var(--muted); border: 1px solid var(--border);
+    border-radius: 5px; padding: 0 5px; }
+  .hud.zoom { right: 14px; bottom: 14px; display: grid; padding: 4px; gap: 2px; }
+  .hud.zoom button { border: 0; background: transparent; width: 32px; height: 32px; padding: 0;
+    display: grid; place-items: center; color: var(--muted); border-radius: 8px; }
+  .hud.zoom button:hover { background: var(--panel-3); color: var(--text); }
+  .hud.legend { left: 14px; bottom: 14px; padding: 10px 12px; font-size: 12px; color: var(--muted);
+    display: grid; grid-template-columns: auto auto; gap: 5px 16px; }
+  .hud.legend .lh { grid-column: 1 / -1; font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); opacity: .8; display: flex; justify-content: space-between; align-items: center; }
+  .hud.legend .lh button { border: 0; padding: 0 2px; background: none; color: var(--muted); font-size: 12px; }
+  .hud.legend.min > :not(.lh) { display: none; }
+  .hud.legend span { display: inline-flex; align-items: center; gap: 8px; }
+  #tip { position: absolute; pointer-events: none; background: rgba(15,21,34,.96);
+    border: 1px solid var(--border); border-radius: 10px; padding: 7px 11px; font-size: 12px;
+    white-space: nowrap; opacity: 0; transform: translateY(4px); box-shadow: 0 8px 22px rgba(0,0,0,.4);
+    transition: opacity .15s, transform .15s; z-index: 4; }
+  #tip.on { opacity: 1; transform: none; }
+  #tip .muted { color: var(--muted); }
+
+  /* ----------------------------------------------------------------- aside */
+  aside { border-left: 1px solid var(--border); background: var(--panel); padding: 16px; overflow-y: auto; }
+  aside h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+    margin: 0 0 10px; font-weight: 600; }
+  aside h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; margin: 18px 0 8px;
+    color: var(--muted); font-weight: 600; }
+  .hero { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 12px;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--rc) 22%, transparent), transparent 70%), var(--panel-2);
+    border: 1px solid color-mix(in srgb, var(--rc) 35%, var(--border)); margin-bottom: 12px; }
+  .hero .ico { width: 44px; height: 44px; border-radius: 12px; flex: none; display: grid; place-items: center;
+    background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--rc) 70%, #fff), var(--rc));
+    box-shadow: 0 0 18px color-mix(in srgb, var(--rc) 50%, transparent); }
+  .hero .ico img { width: 26px; height: 26px; }
+  .hero.failed .ico { background: #2a1520; box-shadow: 0 0 18px rgba(240,86,90,.4);
+    border: 1.5px dashed var(--down); }
+  .hero .name { font-size: 16px; font-weight: 700; line-height: 1.2; word-break: break-all; }
+  .hero .sub { font-size: 12px; color: var(--muted); margin-top: 2px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .kv { display: grid; grid-template-columns: 84px 1fr; margin: 0; font-size: 13px;
+    border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .kv dt, .kv dd { padding: 6px 10px; border-bottom: 1px solid var(--border-soft); margin: 0; }
+  .kv dt { color: var(--muted); background: rgba(255,255,255,.015); }
+  .kv dd { word-break: break-word; }
+  .kv dt:nth-last-of-type(1), .kv dd:last-of-type { border-bottom: 0; }
+  .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12.5px; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 600; }
+  .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .badge.up { color: var(--up); background: rgba(62,207,142,.12); }
+  .badge.down { color: var(--down); background: rgba(240,86,90,.12); }
+  .badge.unknown { color: #a6aec4; background: rgba(166,174,196,.12); }
+  .err { color: #ff9c9f; background: rgba(240,86,90,.08); border: 1px solid rgba(240,86,90,.3);
+    border-radius: 8px; padding: 7px 10px; font-size: 12.5px; margin: 10px 0 0; }
+  .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+  .list button { width: 100%; text-align: left; display: grid; grid-template-columns: 22px 1fr auto;
+    gap: 9px; align-items: center; padding: 7px 9px; border-radius: 9px; }
+  .list button:hover { background: var(--panel-3); }
+  .list .ifs { color: var(--muted); font-size: 11.5px; }
+  .list .mini { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; }
+  .list .mini img { width: 14px; height: 14px; }
+  .list .mini.failed { background: #2a1520 !important; outline: 1px dashed var(--down); }
+  .sdot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .health { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: var(--panel-3); margin: 6px 0 6px; }
+  .health i { display: block; height: 100%; }
+  .health-legend { display: flex; gap: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .health-legend span { display: inline-flex; gap: 5px; align-items: center; }
+  .big { font-size: 28px; font-weight: 750; line-height: 1; font-variant-numeric: tabular-nums; }
+  .big small { font-size: 13px; color: var(--muted); font-weight: 500; margin-left: 4px; }
+  .grp { font-size: 11px; color: var(--muted); margin: 12px 0 5px; display: flex; align-items: center; gap: 6px; }
+  .grp::after { content: ""; flex: 1; height: 1px; background: var(--border-soft); }
+  .empty { color: var(--muted); font-style: italic; margin: 0; }
+  .hint { color: var(--muted); font-size: 12px; margin: 16px 0 0; }
+  .back { border: 0; background: none; color: var(--muted); padding: 0; font-size: 12px; margin-bottom: 10px; }
+  .back:hover { color: var(--text); }
+
+  @media (max-width: 760px) {
+    #app { grid-template-columns: 1fr; grid-template-rows: auto 62vh auto; height: auto; }
+    aside { border-left: 0; border-top: 1px solid var(--border); }
+    .hud.legend { display: none; }
+    .hud.search input { width: 120px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .live i { animation: none !important; }
+    #tip { transition: none; }
+  }
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <h1>Topo Mapper</h1>
-    <span class="stats" id="stats">loading…</span>
-    <span class="spacer"></span>
-    <label>layout
-      <select id="layout">
-        <option value="cose">cose</option>
-        <option value="breadthfirst">breadthfirst</option>
-        <option value="circle">circle</option>
-        <option value="grid">grid</option>
-        <option value="concentric">concentric</option>
-      </select>
-    </label>
-    <button id="refresh">refresh</button>
-    <button id="fit">fit</button>
-  </header>
-  <div id="cy"></div>
-  <aside>
-    <h2>Details</h2>
-    <div id="details"><p class="empty">Click a node or link.</p></div>
-    <div class="legend">
-      <span><i class="dot" style="background:#f2a154"></i>router</span>
-      <span><i class="dot" style="background:#8e5bd9"></i>l3-switch</span>
-      <span><i class="dot" style="background:#4c9be8"></i>switch</span>
-      <span><i class="dot" style="background:#57b894"></i>endpoint</span>
-      <span><i class="dot" style="background:#8a8a8a"></i>unknown</span>
-      <span><i class="dot" style="background:#d64545"></i>unreachable</span>
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#5aa7f0" stroke-width="1.8">
+        <circle cx="14" cy="5" r="3" fill="#5aa7f0"/><circle cx="5" cy="21" r="3" fill="#a274f0" stroke="#a274f0"/>
+        <circle cx="23" cy="21" r="3" fill="#3ecf8e" stroke="#3ecf8e"/>
+        <path d="M12.5 7.6 6.5 18.4M15.5 7.6l6 10.8M8 21h12" stroke-linecap="round" opacity=".8"/>
+      </svg>
+      <div><h1>Topo Mapper</h1><small id="subtitle">CDP / LLDP topology</small></div>
     </div>
+    <span class="live" id="live"><i></i><span id="live-text">connecting…</span></span>
+    <div class="kpis" id="chips"></div>
+    <span class="spacer"></span>
+    <div class="controls">
+      <div class="seg" id="layouts" role="group" aria-label="Layout">
+        <button data-layout="cose" aria-pressed="true">organic</button>
+        <button data-layout="breadthfirst" aria-pressed="false">tree</button>
+        <button data-layout="concentric" aria-pressed="false">rings</button>
+        <button data-layout="circle" aria-pressed="false">circle</button>
+        <button data-layout="grid" aria-pressed="false">grid</button>
+      </div>
+      <button id="motion" class="toggle" aria-pressed="true" title="Toggle link animation">motion</button>
+      <button id="refresh" title="Re-fetch and re-run layout">refresh</button>
+    </div>
+  </header>
+  <div id="stage">
+    <div id="cy"></div>
+    <div id="tip"></div>
+    <label class="hud search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b96b2" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="search" type="search" placeholder="Find device or IP…" autocomplete="off" />
+      <kbd>/</kbd>
+    </label>
+    <div class="hud zoom">
+      <button id="zoom-in" title="Zoom in" aria-label="Zoom in"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button id="zoom-out" title="Zoom out" aria-label="Zoom out"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+      <button id="fit" title="Fit to screen" aria-label="Fit to screen"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    </div>
+    <div class="hud legend" id="legend"></div>
+  </div>
+  <aside>
+    <div id="details"></div>
   </aside>
 </div>
 
 <script>
 const BOOTSTRAP = null;
-const ROLE_COLORS = { router:"#f2a154", "l3-switch":"#8e5bd9", switch:"#4c9be8",
-  endpoint:"#57b894", unknown:"#8a8a8a" };
+const POLL_MS = 10000;
+const ROLE_COLORS = { router: "#f2a154", "l3-switch": "#a274f0", switch: "#4c9be8",
+  endpoint: "#3fc8a0", unknown: "#7a849c" };
+const ROLE_SHAPES = { router: "round-diamond", "l3-switch": "round-hexagon",
+  switch: "round-rectangle", endpoint: "ellipse", unknown: "ellipse" };
+const ROLE_ORDER = ["router", "l3-switch", "switch", "endpoint", "unknown"];
+const STATUS_COLORS = { up: "#3ecf8e", down: "#f0565a", unknown: "#6b7590" };
+const IF_ABBREV = [[/^TenGigabitEthernet/, "Te"], [/^GigabitEthernet/, "Gi"],
+  [/^FastEthernet/, "Fa"], [/^FortyGigabitEthernet/, "Fo"], [/^HundredGigE/, "Hu"],
+  [/^TwentyFiveGigE/, "Twe"], [/^Port-channel/, "Po"], [/^Ethernet/, "Eth"]];
+
+// Line-art glyphs drawn inside each node (24x24, stroked).
+const GLYPHS = {
+  router: '<path d="M12 2.5v6.5M9 6l3 3 3-3M12 21.5V15M9 18l3-3 3 3M2.5 12H9M6 9l3 3-3 3M21.5 12H15M18 9l-3 3 3 3"/>',
+  "l3-switch": '<path d="M3.5 8h13l-3-3M20.5 16h-13l3 3"/><path d="M12 10.5v3"/>',
+  switch: '<path d="M3.5 9h15l-3.5-3.5M20.5 15h-15l3.5 3.5"/>',
+  phone: '<path d="M7 3h3l1.5 4.5-2 1.5a11 11 0 0 0 5.5 5.5l1.5-2L21 14v3a2 2 0 0 1-2 2A16 16 0 0 1 5 5a2 2 0 0 1 2-2z"/>',
+  host: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  unknown: '<path d="M9 9a3 3 0 1 1 4.2 2.75c-.75.33-1.2 1-1.2 1.8V14"/><path d="M12 18h.01"/>',
+};
+
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+let motionOn = !reducedMotion;
+let layoutName = "cose";
+let cy, lastPayload = null, lastMeta = null, lastPoll = null, pollTimer = null, selectedId = null;
+
+const $ = id => document.getElementById(id);
+const esc = v => String(v ?? "").replace(/[&<>"']/g,
+  c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const shortIf = name => IF_ABBREV.reduce((s, [re, ab]) => s.replace(re, ab), name || "");
+const roleColor = role => ROLE_COLORS[role] || ROLE_COLORS.unknown;
+const nodeSize = ele => Math.min(38 + ele.degree() * 6, 66);
+
+function shade(hex, amt) {  // amt > 0 lightens towards white, < 0 darkens towards black
+  const n = parseInt(hex.slice(1), 16), t = amt < 0 ? 0 : 255, p = Math.abs(amt);
+  const ch = s => Math.round(((n >> s) & 255) + (t - ((n >> s) & 255)) * p);
+  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+}
+
+function glyphKey(d) {
+  if (d.role !== "endpoint") return GLYPHS[d.role] ? d.role : "unknown";
+  return /phone|sep[0-9a-f]{12}/i.test(`${d.platform} ${d.label}`) ? "phone" : "host";
+}
+const glyphCache = new Map();
+function glyphUri(key, stroke = "#ffffff") {
+  const k = key + stroke;
+  if (!glyphCache.has(k)) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="${stroke}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${GLYPHS[key]}</svg>`;
+    glyphCache.set(k, "data:image/svg+xml;utf8," + encodeURIComponent(svg));
+  }
+  return glyphCache.get(k);
+}
+const nodeGlyph = d => glyphUri(glyphKey(d), d.failed ? "#f0565a" : "#ffffff");
+
+// ------------------------------------------------------------------ styling
 
 const style = [
   { selector: "node", style: {
-      "label": "data(label)", "color": "#e6e9f2", "font-size": 11,
-      "text-valign": "bottom", "text-margin-y": 4,
-      "background-color": ele => ele.data("failed") ? "#3a2030" : (ROLE_COLORS[ele.data("role")] || ROLE_COLORS.unknown),
-      "border-width": ele => ele.data("failed") ? 2 : (ele.data("reachable") ? 0 : 2),
-      "border-color": ele => ele.data("failed") ? "#d64545" : "#7f8db3",
+      "shape": ele => ROLE_SHAPES[ele.data("role")] || "ellipse",
+      "width": nodeSize, "height": nodeSize,
+      "background-fill": "radial-gradient",
+      "background-gradient-stop-colors": ele => {
+        if (ele.data("failed")) return "#3a1d29 #2a1520 #1c0f16";
+        const c = roleColor(ele.data("role"));
+        return `${shade(c, .35)} ${c} ${shade(c, -.35)}`;
+      },
+      "background-gradient-stop-positions": "0 55 100",
+      "background-opacity": ele => ele.data("reachable") || ele.data("failed") ? 1 : .6,
+      "background-image": ele => nodeGlyph(ele.data()),
+      "background-width": "52%", "background-height": "52%", "background-clip": "none",
+      "border-width": ele => ele.data("reachable") ? 1.5 : 2,
       "border-style": ele => ele.data("reachable") ? "solid" : "dashed",
-      "width": 34, "height": 34,
+      "border-color": ele => ele.data("failed") ? "#f0565a"
+        : ele.data("reachable") ? shade(roleColor(ele.data("role")), .45) : "#a3aecb",
+      "border-opacity": ele => ele.data("reachable") ? .7 : 1,
+      "underlay-color": ele => ele.data("failed") ? "#f0565a" : roleColor(ele.data("role")),
+      "underlay-padding": 8, "underlay-opacity": .18, "underlay-shape": "ellipse",
+      "label": "data(caption)", "text-wrap": "wrap", "line-height": 1.35,
+      "color": "#e8ebf4", "font-size": 11.5, "font-weight": 600,
+      "text-valign": "bottom", "text-margin-y": 7,
+      "text-outline-color": "#0a0f18", "text-outline-width": 3, "text-outline-opacity": .95,
+      "transition-property": "opacity, underlay-opacity, underlay-padding, border-width",
+      "transition-duration": "180ms",
   }},
   { selector: "edge", style: {
-      "curve-style": "bezier", "width": 2,
-      "line-color": ele => ele.data("status") === "down" ? "#d64545" : "#5b6688",
-      "line-style": ele => ele.data("status") === "down" ? "dashed" : "solid",
-      "label": "", "font-size": 9, "color": "#9aa4bf",
-      "text-rotation": "autorotate", "text-background-color": "#0f1420",
-      "text-background-opacity": 1, "text-background-padding": 2,
+      "curve-style": "bezier", "width": ele => (ele.data("protocols") || []).length > 1 ? 3 : 2.2,
+      "line-color": ele => STATUS_COLORS[ele.data("status")] || STATUS_COLORS.unknown,
+      "line-opacity": ele => ele.data("status") === "up" ? .8 : .7,
+      "line-style": ele => ele.data("status") === "unknown" ? "dotted" : "dashed",
+      "line-dash-pattern": ele => ele.data("status") === "up" ? [9, 7] : [4, 6],
+      "line-cap": "round",
+      "underlay-color": ele => STATUS_COLORS[ele.data("status")] || STATUS_COLORS.unknown,
+      "underlay-opacity": 0, "underlay-padding": 4,
+      "label": "", "font-size": 10, "color": "#d3d9ea",
+      "text-rotation": "autorotate", "text-background-color": "#0f1522",
+      "text-background-opacity": .95, "text-background-padding": 4,
+      "text-background-shape": "roundrectangle",
+      "text-border-width": 1, "text-border-color": "#243049", "text-border-opacity": 1,
+      "transition-property": "opacity, width, underlay-opacity", "transition-duration": "180ms",
   }},
-  { selector: "edge.show-label", style: { "label": "data(label)" } },
-  { selector: ":selected", style: { "border-color": "#ffffff", "border-width": 3,
-      "line-color": "#ffffff" } },
+  { selector: "edge.show-label", style: { "label": "data(short)", "width": 4 } },
+  { selector: ".faded", style: { "opacity": .12 } },
+  { selector: "node.hot", style: { "underlay-opacity": .4, "underlay-padding": 13 } },
+  { selector: "edge.hot", style: { "width": 3.5, "line-opacity": 1, "underlay-opacity": .18 } },
+  { selector: "node.match", style: { "border-width": 3, "border-color": "#ffd166", "border-style": "solid",
+      "underlay-color": "#ffd166", "underlay-opacity": .35, "underlay-padding": 14 } },
+  { selector: "node:selected", style: { "border-width": 3, "border-color": "#ffffff",
+      "border-style": "solid", "border-opacity": 1, "underlay-opacity": .5, "underlay-padding": 16 } },
+  { selector: "edge:selected", style: { "width": 5, "label": "data(short)", "underlay-opacity": .25 } },
+  { selector: ".fresh", style: { "underlay-color": "#ffffff", "underlay-opacity": .5,
+      "underlay-padding": 18 } },
 ];
 
-let cy;
+function renderLegend() {
+  const shape = (s, c) => {
+    const p = { "round-rectangle": '<rect x="2" y="3" width="12" height="10" rx="3"/>',
+      "round-hexagon": '<polygon points="8,1.5 14,5 14,11 8,14.5 2,11 2,5" stroke-linejoin="round"/>',
+      "round-diamond": '<polygon points="8,1.5 14.5,8 8,14.5 1.5,8" stroke-linejoin="round"/>',
+      "ellipse": '<circle cx="8" cy="8" r="6"/>' }[s];
+    return `<svg width="16" height="16" viewBox="0 0 16 16" fill="${c}" stroke="${c}">${p}</svg>`;
+  };
+  const line = (c, dash) =>
+    `<svg width="22" height="8" viewBox="0 0 22 8"><line x1="1" y1="4" x2="21" y2="4" stroke="${c}" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="${dash}"/></svg>`;
+  $("legend").innerHTML = [
+    `<div class="lh">legend <button id="legend-toggle" aria-label="Collapse legend">–</button></div>`,
+    ...ROLE_ORDER.slice(0, 4).map(r => `<span>${shape(ROLE_SHAPES[r], ROLE_COLORS[r])}${r}</span>`),
+    `<span><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="#2a1520" stroke="#f0565a" stroke-width="1.6" stroke-dasharray="3 2"/></svg>unreachable</span>`,
+    `<span><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="#3fc8a0" fill-opacity=".55" stroke="#a3aecb" stroke-width="1.6" stroke-dasharray="3 2"/></svg>not scanned</span>`,
+    `<span>${line(STATUS_COLORS.up, "6 4")}link up</span>`,
+    `<span>${line(STATUS_COLORS.down, "3 4")}link down</span>`,
+    `<span>${line(STATUS_COLORS.unknown, "1 4")}unknown</span>`,
+  ].join("");
+  $("legend-toggle").onclick = () => {
+    const min = $("legend").classList.toggle("min");
+    $("legend-toggle").textContent = min ? "+" : "–";
+    try { localStorage.setItem("topo.legendMin", min ? "1" : ""); } catch {}
+  };
+  try { if (localStorage.getItem("topo.legendMin")) $("legend-toggle").click(); } catch {}
+}
 
-function layoutOpts(name) {
-  const base = { name, animate: true, padding: 30 };
-  if (name === "cose") return { ...base, idealEdgeLength: 120, nodeRepulsion: 9000 };
-  if (name === "breadthfirst") return { ...base, spacingFactor: 1.3, directed: false };
+// ------------------------------------------------------------------ layout
+
+function seedIds() {
+  const seeds = cy.nodes().filter(n => n.data("discovered_via") === "seed");
+  return seeds.length ? seeds : cy.nodes().max(n => n.degree()).ele;
+}
+
+function layoutOpts(name, animate = true, keepPositions = false) {
+  const base = { name, animate: animate && motionOn, animationDuration: 600, padding: 70,
+    fit: true, animationEasing: "ease-out-cubic", nodeDimensionsIncludeLabels: true };
+  if (name === "cose") return { ...base, idealEdgeLength: () => 95, nodeRepulsion: () => 45000,
+    nodeOverlap: 30, gravity: .4, numIter: 2500, randomize: !keepPositions };
+  if (name === "breadthfirst") return { ...base, roots: seedIds(), spacingFactor: 1.2,
+    directed: false };
+  if (name === "concentric") return { ...base, minNodeSpacing: 45,
+    concentric: n => n.degree(), levelWidth: () => 1 };
   return base;
 }
 
-function renderDetails(data, kind) {
-  const el = document.getElementById("details");
-  const rows = [];
-  const add = (k, v) => { if (v !== undefined && v !== null && v !== "")
-    rows.push(`<dt>${k}</dt><dd>${Array.isArray(v) ? v.join(", ") : v}</dd>`); };
-  if (kind === "node") {
-    add("name", data.label); add("id", data.id); add("role", data.role);
-    add("mgmt ip", data.mgmt_ip); add("platform", data.platform);
-    add("reachable", String(data.reachable)); add("found via", data.discovered_via);
-    if (data.errors && data.errors.length) add("errors", data.errors);
-  } else {
-    add("link", `${data.source} ↔ ${data.target}`);
-    add(data.source, data.a_interface); add(data.target, data.b_interface);
-    add("protocols", data.protocols); add("status", data.status);
-  }
-  el.innerHTML = rows.length ? `<dl class="kv">${rows.join("")}</dl>`
-    : `<p class="empty">No attributes.</p>`;
-}
-
-function load(elements, meta) {
-  if (cy) cy.destroy();
-  cy = cytoscape({
-    container: document.getElementById("cy"),
-    elements, style,
-    layout: layoutOpts(document.getElementById("layout").value),
+function runLayout(animate = true, keepPositions = false) {
+  const layout = cy.layout(layoutOpts(layoutName, animate, keepPositions));
+  layout.one("layoutstop", () => {
+    if (cy.zoom() > 1.35) { cy.zoom(1.35); cy.center(); }
   });
-  cy.on("tap", "node", e => renderDetails(e.target.data(), "node"));
-  cy.on("tap", "edge", e => renderDetails(e.target.data(), "edge"));
-  cy.on("mouseover", "edge", e => e.target.addClass("show-label"));
-  cy.on("mouseout", "edge", e => e.target.removeClass("show-label"));
-  const s = meta && meta.stats || {};
-  document.getElementById("stats").textContent =
-    `${s.devices ?? "?"} devices · ${s.reachable ?? "?"} reachable · ${s.links ?? "?"} links` +
-    (meta && meta.generated_at ? `  ·  ${meta.generated_at}` : "");
+  layout.run();
+  return layout;
 }
 
-async function fetchAndLoad() {
-  if (BOOTSTRAP) { load(BOOTSTRAP.elements, BOOTSTRAP.meta); return; }
+// ---------------------------------------------------------- entrance ripple
+
+function ripple() {
+  if (!motionOn) return;
+  const roots = seedIds();
+  const hops = new Map();
+  cy.elements().bfs({ roots, visit: (v, e, u, i, depth) => { hops.set(v.id(), depth); } });
+  cy.elements().style("opacity", 0);
+  cy.nodes().forEach(n => {
+    const d = hops.get(n.id()) ?? 4;
+    n.delay(120 + d * 170).animate({ style: { opacity: 1 } }, { duration: 380 });
+  });
+  cy.edges().forEach(e => {
+    const d = Math.max(hops.get(e.source().id()) ?? 4, hops.get(e.target().id()) ?? 4);
+    e.delay(200 + d * 170).animate({ style: { opacity: 1 } }, { duration: 380 });
+  });
+  setTimeout(() => cy && cy.elements().removeStyle("opacity"), 2200);
+}
+
+// ------------------------------------------------------------- animation loop
+
+let dashOffset = 0, lastFrame = 0;
+function frame(t) {
+  requestAnimationFrame(frame);
+  if (!cy || !motionOn || document.hidden || t - lastFrame < 33) return;
+  const dt = lastFrame ? t - lastFrame : 33;
+  lastFrame = t;
+  dashOffset = (dashOffset - dt * 0.03) % 1600;
+  const pulse = .22 + .2 * Math.sin(t / 380);
+  cy.batch(() => {
+    cy.edges('[status = "up"]').style("line-dash-offset", dashOffset);
+    cy.edges('[status = "down"]').style("line-opacity", .45 + .35 * Math.abs(Math.sin(t / 260)));
+    cy.nodes("[?failed]").not(":selected").not(".match").style({ "underlay-opacity": pulse,
+      "underlay-padding": 8 + 8 * (pulse - .02) });
+  });
+}
+
+function setMotion(on) {
+  motionOn = on;
+  $("motion").setAttribute("aria-pressed", String(on));
+  if (!on && cy) cy.batch(() => {
+    cy.edges().removeStyle("line-dash-offset line-opacity");
+    cy.nodes().removeStyle("underlay-opacity underlay-padding");
+  });
+}
+
+// ------------------------------------------------------------------ details
+
+function statusBadge(status, text) {
+  const s = ["up", "down"].includes(status) ? status : "unknown";
+  return `<span class="badge ${s}">${esc(text || status || "unknown")}</span>`;
+}
+
+function nodeState(d) {
+  if (d.reachable) return statusBadge("up", "reachable");
+  if (d.failed) return statusBadge("down", "failed");
+  return statusBadge("unknown", "not scanned");
+}
+
+function miniIcon(d) {
+  const bg = d.failed ? "" : `background:${roleColor(d.role)}`;
+  return `<i class="mini${d.failed ? " failed" : ""}" style="${bg}"><img alt="" src="${nodeGlyph(d)}"></i>`;
+}
+
+function renderNode(node) {
+  const d = node.data();
+  const rows = [["mgmt ip", d.mgmt_ip && `<span class="mono">${esc(d.mgmt_ip)}</span>`],
+    ["platform", esc(d.platform)], ["found via", esc(d.discovered_via)],
+    ["links", `${node.degree()}`]]
+    .filter(([, v]) => v).map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  const errors = (d.errors || []).map(e => `<p class="err">${esc(e)}</p>`).join("");
+  const nbrs = node.connectedEdges().map(e => {
+    const other = e.source().id() === node.id() ? e.target() : e.source();
+    const [mine, theirs] = e.source().id() === node.id()
+      ? [e.data("a_interface"), e.data("b_interface")] : [e.data("b_interface"), e.data("a_interface")];
+    return `<li><button data-node="${esc(other.id())}">
+      ${miniIcon(other.data())}
+      <span>${esc(other.data("label"))}<br><span class="ifs mono">${esc(shortIf(mine))} → ${esc(shortIf(theirs))}</span></span>
+      <span class="ifs" title="${esc((e.data("protocols") || []).join("/"))}"><i class="sdot" style="background:${STATUS_COLORS[e.data("status")] || STATUS_COLORS.unknown}"></i></span></button></li>`;
+  }).join("");
+  $("details").innerHTML = `
+    <button class="back" data-back>← network overview</button>
+    <div class="hero${d.failed ? " failed" : ""}" style="--rc:${d.failed ? "#f0565a" : roleColor(d.role)}">
+      <div class="ico"><img alt="" src="${nodeGlyph(d)}"></div>
+      <div><div class="name">${esc(d.label)}</div>
+        <div class="sub">${esc(d.role)} ${nodeState(d)}</div></div>
+    </div>
+    <dl class="kv">${rows}</dl>${errors}
+    <h3>Neighbours (${node.degree()})</h3>
+    ${nbrs ? `<ul class="list">${nbrs}</ul>` : '<p class="empty">None discovered.</p>'}`;
+}
+
+function renderEdge(edge) {
+  const d = edge.data();
+  const a = edge.source().data(), b = edge.target().data();
+  $("details").innerHTML = `
+    <button class="back" data-back>← network overview</button>
+    <div class="hero" style="--rc:${STATUS_COLORS[d.status] || STATUS_COLORS.unknown}">
+      <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M7.5 12h9" stroke-dasharray="2.5 2.5"/></svg></div>
+      <div><div class="name">${esc(a.label)} ↔ ${esc(b.label)}</div>
+        <div class="sub">link ${statusBadge(d.status)}</div></div>
+    </div>
+    <dl class="kv">
+      <dt>${esc(a.label)}</dt><dd class="mono">${esc(d.a_interface)}</dd>
+      <dt>${esc(b.label)}</dt><dd class="mono">${esc(d.b_interface)}</dd>
+      <dt>protocols</dt><dd>${esc((d.protocols || []).join(", ").toUpperCase())}</dd>
+    </dl>
+    <h3>Endpoints</h3>
+    <ul class="list">
+      ${[a, b].map(x => `<li><button data-node="${esc(x.id)}">${miniIcon(x)}<span>${esc(x.label)}<br><span class="ifs">${esc(x.role)}</span></span>${nodeState(x)}</button></li>`).join("")}
+    </ul>`;
+}
+
+function showDefault() {
+  if (!cy) { $("details").innerHTML = '<p class="empty">Loading topology…</p>'; return; }
+  const nodes = cy.nodes();
+  const total = nodes.length;
+  const ok = nodes.filter("[?reachable]").length;
+  const bad = nodes.filter("[?failed]").length;
+  const unk = total - ok - bad;
+  const pct = n => total ? (100 * n / total).toFixed(1) : 0;
+  const links = cy.edges(), down = links.filter('[status = "down"]').length;
+  const groups = ROLE_ORDER.map(role => {
+    const members = nodes.filter(n => (n.data("role") || "unknown") === role)
+      .sort((x, y) => x.data("label").localeCompare(y.data("label")));
+    if (!members.length) return "";
+    return `<div class="grp">${esc(role)} · ${members.length}</div><ul class="list">` +
+      members.map(n => `<li><button data-node="${esc(n.id())}">${miniIcon(n.data())}
+        <span>${esc(n.data("label"))}<br><span class="ifs mono">${esc(n.data("mgmt_ip") || "no mgmt ip")}</span></span>
+        ${nodeState(n.data())}</button></li>`).join("") + "</ul>";
+  }).join("");
+  $("details").innerHTML = `
+    <h2>Network health</h2>
+    <div class="big">${ok}<small>/ ${total} devices reachable</small></div>
+    <div class="health">
+      <i style="width:${pct(ok)}%;background:var(--up)"></i>
+      <i style="width:${pct(bad)}%;background:var(--down)"></i>
+      <i style="width:${pct(unk)}%;background:var(--unknown)"></i>
+    </div>
+    <div class="health-legend">
+      <span><i class="sdot" style="background:var(--up)"></i>${ok} reachable</span>
+      <span><i class="sdot" style="background:var(--down)"></i>${bad} failed</span>
+      <span><i class="sdot" style="background:var(--unknown)"></i>${unk} not scanned</span>
+      <span>· ${links.length} links${down ? `, <b style="color:var(--down)">${down} down</b>` : ""}</span>
+    </div>
+    <h3>Inventory</h3>
+    ${groups}
+    <p class="hint">Hover a device to trace its links · click for details · press <span class="mono">/</span> to search.</p>`;
+}
+
+$("details").addEventListener("click", ev => {
+  if (ev.target.closest("[data-back]")) { clearSelection(); return; }
+  const btn = ev.target.closest("button[data-node]");
+  if (!btn || !cy) return;
+  const node = cy.getElementById(btn.dataset.node);
+  if (node.nonempty()) selectNode(node);
+});
+
+function selectNode(node) {
+  cy.elements().unselect();
+  node.select();
+  selectedId = node.id();
+  unfocus();
+  hideTip();
+  renderNode(node);
+  cy.animate({ center: { eles: node }, zoom: Math.max(cy.zoom(), 1) },
+    { duration: motionOn ? 450 : 0, easing: "ease-in-out-cubic" });
+}
+
+function clearSelection() {
+  selectedId = null;
+  if (cy) { cy.elements().unselect(); unfocus(); }
+  showDefault();
+}
+
+// ------------------------------------------------------------- hover / tips
+
+function focus(node) {
+  const hood = node.closedNeighborhood();
+  cy.batch(() => {
+    cy.elements().not(hood).addClass("faded");
+    hood.removeClass("faded");
+    hood.nodes().addClass("hot");
+    hood.edges().addClass("hot show-label");
+  });
+}
+
+// Clear hover focus, falling back to the selected node's neighbourhood if any.
+function unfocus() {
+  cy.batch(() => cy.elements().removeClass("faded hot show-label"));
+  const sel = selectedId && cy.getElementById(selectedId);
+  if (sel && sel.nonempty()) focus(sel);
+}
+
+function showTip(html, pos) {
+  const tip = $("tip");
+  tip.innerHTML = html;
+  const stage = $("stage").getBoundingClientRect();
+  const x = Math.min(pos.x + 14, stage.width - tip.offsetWidth - 8);
+  const y = Math.max(pos.y - tip.offsetHeight - 14, 8);
+  tip.style.left = `${x}px`; tip.style.top = `${y}px`;
+  tip.classList.add("on");
+}
+const hideTip = () => $("tip").classList.remove("on");
+
+// ------------------------------------------------------------------ search
+
+function matches(q) {
+  q = q.trim().toLowerCase();
+  if (!q || !cy) return cy ? cy.collection() : null;
+  return cy.nodes().filter(n => [n.data("label"), n.data("mgmt_ip"), n.data("role"), n.data("platform")]
+    .some(v => v && String(v).toLowerCase().includes(q)));
+}
+
+$("search").addEventListener("input", () => {
+  if (!cy) return;
+  const hits = matches($("search").value);
+  cy.batch(() => {
+    cy.nodes().removeClass("match");
+    hits.addClass("match");
+  });
+});
+$("search").addEventListener("keydown", ev => {
+  if (ev.key === "Enter" && cy) {
+    const hit = matches($("search").value).first();
+    if (hit.nonempty()) selectNode(hit);
+  } else if (ev.key === "Escape") {
+    $("search").value = "";
+    cy && cy.nodes().removeClass("match");
+    $("search").blur();
+  }
+});
+document.addEventListener("keydown", ev => {
+  if (ev.key === "/" && document.activeElement !== $("search")) { ev.preventDefault(); $("search").focus(); }
+  else if (ev.key === "Escape" && document.activeElement !== $("search")) clearSelection();
+});
+
+// ------------------------------------------------------------------ loading
+
+function decorate(elements) {
+  return elements.map(el => {
+    if (el.data.source) el.data.short = `${shortIf(el.data.a_interface)} — ${shortIf(el.data.b_interface)}`;
+    else el.data.caption = el.data.mgmt_ip ? `${el.data.label}\n${el.data.mgmt_ip}` : el.data.label;
+    return el;
+  });
+}
+
+function renderChips(meta) {
+  const s = (meta && meta.stats) || {};
+  const kpi = (k, v, c, bad) =>
+    `<span class="kpi${bad && v ? " bad" : ""}" style="--c:${c}"><i></i><b>${esc(v ?? "?")}</b>${k}</span>`;
+  $("chips").innerHTML = kpi("devices", s.devices, "#5aa7f0") + kpi("reachable", s.reachable, "#3ecf8e") +
+    kpi("failed", s.failed, "#f0565a", true) + kpi("links", s.links, "#a274f0");
+  const seeds = (meta && meta.seeds) || [];
+  $("subtitle").textContent = seeds.length ? `seed ${seeds.join(", ")}` : "CDP / LLDP topology";
+}
+
+function ago(iso) {
+  if (!iso) return "";
+  const sec = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
+  if (sec < 60) return `${sec}s ago`;
+  if (sec < 3600) return `${Math.round(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.round(sec / 3600)}h ago`;
+  return `${Math.round(sec / 86400)}d ago`;
+}
+
+function updateLive(state) {
+  const live = $("live");
+  live.classList.remove("static", "error");
+  if (state) live.classList.add(state);
+  const snap = lastMeta && lastMeta.generated_at ? `snapshot ${ago(lastMeta.generated_at)}` : "";
+  $("live-text").textContent = state === "static" ? `static export · ${snap}`
+    : state === "error" ? "server unreachable — retrying"
+    : `live · ${snap}`;
+}
+
+function build(elements, meta) {
+  if (cy) cy.destroy();
+  cy = cytoscape({ container: $("cy"), elements: decorate(elements), style,
+    minZoom: .2, maxZoom: 3, wheelSensitivity: .25, boxSelectionEnabled: false });
+
+  cy.on("mouseover", "node", e => {
+    focus(e.target);
+    const d = e.target.data();
+    showTip(`<b>${esc(d.label)}</b> <span class="muted">${esc(d.role)}${d.mgmt_ip ? " · " + esc(d.mgmt_ip) : ""}</span>`
+      + `<br><span class="muted">${e.target.degree()} link${e.target.degree() === 1 ? "" : "s"}</span>`
+      + (d.failed ? ` · <span style="color:var(--down)">unreachable</span>` : ""), e.renderedPosition);
+  });
+  cy.on("mouseout", "node", () => { unfocus(); hideTip(); });
+  cy.on("mouseover", "edge", e => {
+    e.target.addClass("show-label hot");
+    showTip(`${esc(e.target.source().data("label"))} ↔ ${esc(e.target.target().data("label"))}
+      <span class="muted">· ${esc(e.target.data("status"))}</span>`, e.renderedPosition);
+  });
+  cy.on("mouseout", "edge", e => { e.target.removeClass("show-label hot"); hideTip(); });
+  cy.on("tap", "node", e => selectNode(e.target));
+  cy.on("tap", "edge", e => { selectedId = null; unfocus(); renderEdge(e.target); });
+  cy.on("tap", e => { if (e.target === cy) clearSelection(); });
+  cy.on("pan zoom", hideTip);
+
+  runLayout(false);
+  ripple();
+  showDefault();
+}
+
+// Patch the running graph in place so positions survive a refresh.
+function patch(elements) {
+  const incoming = new Map(decorate(elements).map(el => [el.data.id, el]));
+  const added = [];
+  cy.batch(() => {
+    cy.elements().forEach(ele => { if (!incoming.has(ele.id())) ele.remove(); });
+    const nodes = [...incoming.values()].filter(el => !el.data.source);
+    const edges = [...incoming.values()].filter(el => el.data.source);
+    for (const el of [...nodes, ...edges]) {
+      const existing = cy.getElementById(el.data.id);
+      if (existing.nonempty()) existing.data(el.data);
+      else added.push(cy.add(el));
+    }
+  });
+  cy.style().update();
+  const newNodes = added.filter(a => a.isNode());
+  newNodes.forEach(n => {
+    const anchor = n.neighborhood("node").filter(m => !newNodes.includes(m)).first();
+    if (anchor.nonempty()) n.position({ x: anchor.position("x") + 60 * (Math.random() - .5),
+      y: anchor.position("y") + 60 * (Math.random() - .5) });
+  });
+  if (newNodes.length) {
+    // Only the newcomers move; everything already on screen stays where it is.
+    const settled = cy.nodes().not(cy.collection(newNodes)).lock();
+    runLayout(true, true).one("layoutstop", () => settled.unlock());
+  }
+  added.forEach(a => {
+    a.addClass("fresh");
+    setTimeout(() => a.removeClass("fresh"), 2500);
+  });
+  const sel = selectedId && cy.getElementById(selectedId);
+  if (sel && sel.nonempty()) renderNode(sel);
+  else if (!$("details").querySelector("[data-back]")) showDefault();
+}
+
+async function poll(force = false) {
   try {
-    const r = await fetch("api/topology");
-    const data = await r.json();
-    load(data.elements, data.meta);
+    const r = await fetch("api/topology", { cache: "no-store" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const text = await r.text();
+    const data = JSON.parse(text);
+    lastPoll = Date.now();
+    lastMeta = data.meta;
+    renderChips(data.meta);
+    if (!cy || force && !lastPayload) build(data.elements, data.meta);
+    else if (text !== lastPayload) patch(data.elements);
+    lastPayload = text;
+    updateLive();
+    const live = $("live");
+    live.classList.remove("tick"); void live.offsetWidth; live.classList.add("tick");
   } catch (err) {
-    document.getElementById("stats").textContent = "failed to load api/topology";
-    console.error(err);
+    updateLive("error");
+    console.error("topology poll failed", err);
   }
 }
 
-document.getElementById("refresh").onclick = fetchAndLoad;
-document.getElementById("fit").onclick = () => cy && cy.fit(undefined, 30);
-document.getElementById("layout").onchange = () =>
-  cy && cy.layout(layoutOpts(document.getElementById("layout").value)).run();
+function start() {
+  renderLegend();
+  showDefault();
+  if (!motionOn) setMotion(false);
+  requestAnimationFrame(frame);
+  if (BOOTSTRAP) {
+    lastMeta = BOOTSTRAP.meta;
+    renderChips(BOOTSTRAP.meta);
+    build(BOOTSTRAP.elements, BOOTSTRAP.meta);
+    updateLive("static");
+    $("refresh").disabled = true;
+    setInterval(() => updateLive("static"), 30000);
+    return;
+  }
+  poll(true);
+  pollTimer = setInterval(() => { if (!document.hidden) poll(); }, POLL_MS);
+  setInterval(() => { if (lastMeta && !$("live").classList.contains("error")) updateLive(); }, 15000);
+}
 
-fetchAndLoad();
+const zoomBy = f => cy && cy.animate({ zoom: { level: cy.zoom() * f,
+  renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } } }, { duration: motionOn ? 200 : 0 });
+$("zoom-in").onclick = () => zoomBy(1.25);
+$("zoom-out").onclick = () => zoomBy(.8);
+$("refresh").onclick = () => { if (cy) runLayout(true); poll(); };
+$("fit").onclick = () => cy && cy.animate({ fit: { eles: cy.elements(), padding: 70 } },
+  { duration: motionOn ? 400 : 0 });
+$("layouts").addEventListener("click", ev => {
+  const btn = ev.target.closest("button[data-layout]");
+  if (!btn) return;
+  layoutName = btn.dataset.layout;
+  $("layouts").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+  cy && runLayout(true);
+});
+$("motion").onclick = () => setMotion(!motionOn);
+
+start();
 </script>
 </body>
 </html>

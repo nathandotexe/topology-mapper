@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from .cytoscape import to_cytoscape, to_standalone_html
 from .grafana import to_grafana_nodegraph
+from .simple import to_simple_html
 from .text import to_mermaid
 
 FORMATS = {
@@ -11,6 +12,7 @@ FORMATS = {
     "grafana": to_grafana_nodegraph,
     "mermaid": to_mermaid,
     "html": to_standalone_html,
+    "simple": to_simple_html,
 }
 
 __all__ = [
@@ -18,5 +20,6 @@ __all__ = [
     "to_cytoscape",
     "to_grafana_nodegraph",
     "to_mermaid",
+    "to_simple_html",
     "to_standalone_html",
 ]

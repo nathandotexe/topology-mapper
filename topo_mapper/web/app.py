@@ -4,6 +4,7 @@
 
 Endpoints:
     GET /               -> the Cytoscape.js single-page viewer
+    GET /simple         -> static HTML report (tables, no JavaScript)
     GET /api/topology   -> Cytoscape elements + meta (what the viewer fetches)
     GET /api/snapshot   -> the raw discovery snapshot
 """
@@ -11,7 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..exporters import to_cytoscape
+from ..exporters import to_cytoscape, to_simple_html
 from ..graph import load_snapshot
 
 _STATIC = Path(__file__).with_name("static")
@@ -20,7 +21,7 @@ _STATIC = Path(__file__).with_name("static")
 def create_app(snapshot_path: str | Path):
     try:
         from fastapi import FastAPI
-        from fastapi.responses import FileResponse, JSONResponse
+        from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
     except ImportError as exc:  # pragma: no cover - import guard
         raise SystemExit(
             "The web viewer needs FastAPI. Install extras: pip install 'topo-mapper[web]'"
@@ -32,6 +33,10 @@ def create_app(snapshot_path: str | Path):
     @app.get("/", include_in_schema=False)
     def index():
         return FileResponse(_STATIC / "index.html")
+
+    @app.get("/simple", include_in_schema=False)
+    def simple():
+        return HTMLResponse(to_simple_html(load_snapshot(snapshot_path)))
 
     @app.get("/api/topology")
     def topology():

@@ -86,7 +86,7 @@ Netmiko defaults → `.env` → inventory `defaults:` → inventory `devices.<ho
 |---|---|
 | `topo-mapper discover` | Walk a live topology, write a snapshot. `--mock DIR` replays captured output instead of SSH. |
 | `topo-mapper demo` | `discover` against the bundled mock lab. `--serve` to open the viewer. |
-| `topo-mapper export --format {cytoscape,grafana,mermaid,html,json}` | Convert a snapshot. `--out -` for stdout. |
+| `topo-mapper export --format {cytoscape,grafana,mermaid,html,simple,json}` | Convert a snapshot. `--out -` for stdout. |
 | `topo-mapper serve` | FastAPI backend + Cytoscape.js viewer for a snapshot. |
 
 Key `discover` flags: `--protocol cdp,lldp`, `--enrich`, `--max-devices N`,
@@ -119,6 +119,10 @@ Key `discover` flags: `--protocol cdp,lldp`, `--enrich`, `--max-devices N`,
 **Cytoscape.js viewer** — `topo-mapper serve` (or a fully standalone file via
 `export --format html --out topo.html`). Nodes coloured by role, unreachable
 nodes dashed red, click a node/edge for details, switchable layouts.
+
+**Simple HTML report** — summary stats plus device and link tables, with no
+JavaScript or CDN needed. Served at `/simple` by `topo-mapper serve`, or written
+to a file with `export --format simple --out report.html`.
 
 **Grafana Node Graph** — `export --format grafana --out nodegraph.json` produces
 `{ "nodes": [...], "edges": [...] }` matching the Node Graph panel's default

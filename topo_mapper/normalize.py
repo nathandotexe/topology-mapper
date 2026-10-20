@@ -1,10 +1,4 @@
-"""Hostname and interface canonicalization.
 
-Neighbor data reports the same device and the same link in several forms
-(``Gi0/1`` vs ``GigabitEthernet0/1``; ``SW1`` vs ``SW1.lab.local`` vs
-``SW1(FDO123)``). Everything is normalized through here so the graph does not
-sprout duplicate nodes or edges.
-"""
 from __future__ import annotations
 
 import re

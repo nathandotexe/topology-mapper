@@ -1,9 +1,4 @@
-"""Parsers for Cisco IOS ``show`` output used during discovery.
 
-These are deliberately regex-based and dependency-free so they can be unit
-tested against captured fixtures. If ``ntc-templates`` is available you could
-swap in Netmiko's ``use_textfsm=True`` and adapt the rows to ``NeighborRecord``.
-"""
 from __future__ import annotations
 
 import re
@@ -21,9 +16,6 @@ def _split_blocks(text: str) -> list[str]:
 def _first(pattern: str, text: str, flags: int = 0) -> str | None:
     match = re.search(pattern, text, flags)
     return match.group(1).strip() if match else None
-
-
-# --------------------------------------------------------------------------- CDP
 
 
 def parse_cdp_detail(text: str) -> list[NeighborRecord]:
@@ -97,7 +89,6 @@ def parse_lldp_detail(text: str) -> list[NeighborRecord]:
     return records
 
 
-# --------------------------------------------------------------- interface state
 
 _STATUS_UP = {"connected", "up"}
 _STATUS_DOWN = {

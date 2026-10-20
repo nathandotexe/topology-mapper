@@ -15,6 +15,9 @@ venv/
 .env
 inventory.yaml
 
+# Local Claude Code config
+CLAUDE.md
+
 # Discovery output
 topology.json
 *.snapshot.json

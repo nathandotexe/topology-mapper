@@ -166,7 +166,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--format",
         required=True,
         choices=sorted(FORMATS),
-        help="cytoscape | grafana | mermaid | html | json",
+        help="cytoscape | grafana | mermaid | html | simple | json",
     )
     p_exp.add_argument("--out", default="-", help="output file, or - for stdout")
     p_exp.set_defaults(func=cmd_export)
