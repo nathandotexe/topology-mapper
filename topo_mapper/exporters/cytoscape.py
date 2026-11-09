@@ -4,8 +4,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-_VIEWER = Path(__file__).resolve().parents[1] / "web" / "static" / "index.html"
+_STATIC = Path(__file__).resolve().parents[1] / "web" / "static"
+_VIEWER = _STATIC / "index.html"
 _BOOTSTRAP_MARKER = "const BOOTSTRAP = null;"
+_LIBRARY_TAG = '<script src="static/cytoscape.min.js"></script>'
 
 
 def to_cytoscape(snapshot: dict) -> dict:
@@ -25,6 +27,7 @@ def to_cytoscape(snapshot: dict) -> dict:
                     "mgmt_ip": dev.get("mgmt_ip"),
                     "discovered_via": dev.get("discovered_via"),
                     "errors": dev.get("errors", []),
+                    "metrics": dev.get("metrics"),
                 }
             }
         )
@@ -58,7 +61,9 @@ def to_cytoscape(snapshot: dict) -> dict:
 def to_standalone_html(snapshot: dict) -> str:
     """Inline the snapshot into the viewer template -> one shareable .html file."""
     template = _VIEWER.read_text(encoding="utf-8")
-    payload = json.dumps(to_cytoscape(snapshot))
-    if _BOOTSTRAP_MARKER not in template:  # pragma: no cover - guards template drift
-        raise RuntimeError("viewer template is missing the BOOTSTRAP marker")
+    payload = json.dumps(to_cytoscape(snapshot)).replace("</", "<\\/")
+    if _BOOTSTRAP_MARKER not in template or _LIBRARY_TAG not in template:  # pragma: no cover
+        raise RuntimeError("viewer template is missing the BOOTSTRAP marker or library tag")
+    library = (_STATIC / "cytoscape.min.js").read_text(encoding="utf-8").replace("</script", "<\\/script")
+    template = template.replace(_LIBRARY_TAG, f"<script>{library}</script>")
     return template.replace(_BOOTSTRAP_MARKER, f"const BOOTSTRAP = {payload};")

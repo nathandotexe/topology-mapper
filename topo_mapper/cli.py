@@ -119,13 +119,72 @@ def cmd_export(args) -> None:
         sys.stdout.write(rendered)
 
 
+def _redact_from_env() -> bool:
+    return os.getenv("TOPO_REDACT_PUBLIC", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+
 def cmd_serve(args) -> None:
     from .web.app import serve
+    from .web.security import AuthConfig, ensure_safe_bind
 
+    auth = AuthConfig.from_env()
+    redact = _redact_from_env()
+    ensure_safe_bind(args.host, auth)
+    if args.db:
+        print(f"Serving live probe data from {args.db} on http://{args.host}:{args.port}")
+        serve(host=args.host, port=args.port, db_path=args.db, auth=auth, redact=redact)
+        return
     if not Path(args.in_path).exists():
         sys.exit(f"Snapshot not found: {args.in_path} (run `topo-mapper discover` first)")
     print(f"Serving {args.in_path} on http://{args.host}:{args.port}")
-    serve(args.in_path, host=args.host, port=args.port)
+    serve(args.in_path, host=args.host, port=args.port, auth=auth)
+
+
+def cmd_probe(args) -> None:
+    import signal
+    import threading
+
+    from .probes import ProbeStore, TargetError, load_targets
+    from .probes.monitor import Monitor
+
+    try:
+        targets = load_targets(args.targets)
+    except TargetError as exc:
+        sys.exit(f"targets: {exc}")
+
+    with ProbeStore(args.db) as store:
+        store.salt()  # create the masking salt now so the viewer can share it
+        monitor = Monitor(targets, store, retention_days=args.retention_days)
+        if args.once:
+            for result in monitor.run_once():
+                if not result.ok:
+                    outcome = f"failed ({result.error})"
+                elif result.reached:
+                    outcome = f"reached, {len(result.hops)} hops"
+                else:
+                    outcome = "not reached"
+                print(f"{result.target}: {outcome}")
+            return
+        stop = threading.Event()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            signal.signal(sig, lambda *_: stop.set())
+        print(f"Probing {len(targets)} target(s), history in {args.db}. Ctrl+C to stop.")
+        monitor.run_forever(stop)
+
+
+def cmd_probe_snapshot(args) -> None:
+    from .probes import ProbeStore, Redactor, StoreUnavailable
+    from .probes.graphview import build_path_snapshot
+
+    try:
+        store = ProbeStore(args.db, readonly=True)
+    except StoreUnavailable as exc:
+        sys.exit(str(exc))
+    with store:
+        redactor = Redactor(store.salt() or "export", enabled=not args.no_redact)
+        snapshot = build_path_snapshot(store, redactor)
+    save_snapshot(args.out, snapshot)
+    print(f"Wrote {'masked ' if redactor.enabled else 'UNMASKED '}path snapshot to {args.out}")
 
 
 # ------------------------------------------------------------------- arg parsing
@@ -171,11 +230,25 @@ def build_parser() -> argparse.ArgumentParser:
     p_exp.add_argument("--out", default="-", help="output file, or - for stdout")
     p_exp.set_defaults(func=cmd_export)
 
-    p_srv = sub.add_parser("serve", help="serve the interactive viewer for a snapshot")
+    p_srv = sub.add_parser("serve", help="serve the interactive viewer for a snapshot or probe database")
     p_srv.add_argument("--in", dest="in_path", default=DEFAULT_OUT, help="snapshot to serve")
+    p_srv.add_argument("--db", help="serve live hop-probe data from this database instead")
     p_srv.add_argument("--host", default="127.0.0.1")
     p_srv.add_argument("--port", type=int, default=8000)
     p_srv.set_defaults(func=cmd_serve)
+
+    p_probe = sub.add_parser("probe", help="trace paths to targets on a schedule and record hop health")
+    p_probe.add_argument("--targets", default="targets.yaml", help="targets file (default: targets.yaml)")
+    p_probe.add_argument("--db", default="probe.db", help="SQLite history (default: probe.db)")
+    p_probe.add_argument("--once", action="store_true", help="probe every target once and exit")
+    p_probe.add_argument("--retention-days", type=float, default=14, help="history to keep (default: 14)")
+    p_probe.set_defaults(func=cmd_probe)
+
+    p_ps = sub.add_parser("probe-snapshot", help="write the latest probe paths as a snapshot file")
+    p_ps.add_argument("--db", default="probe.db")
+    p_ps.add_argument("--out", default="probe-topology.json")
+    p_ps.add_argument("--no-redact", action="store_true", help="keep public IPs (do not share the file)")
+    p_ps.set_defaults(func=cmd_probe_snapshot)
 
     return parser
 

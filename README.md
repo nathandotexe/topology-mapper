@@ -87,7 +87,9 @@ Netmiko defaults → `.env` → inventory `defaults:` → inventory `devices.<ho
 | `topo-mapper discover` | Walk a live topology, write a snapshot. `--mock DIR` replays captured output instead of SSH. |
 | `topo-mapper demo` | `discover` against the bundled mock lab. `--serve` to open the viewer. |
 | `topo-mapper export --format {cytoscape,grafana,mermaid,html,simple,json}` | Convert a snapshot. `--out -` for stdout. |
-| `topo-mapper serve` | FastAPI backend + Cytoscape.js viewer for a snapshot. |
+| `topo-mapper serve` | FastAPI backend + Cytoscape.js viewer for a snapshot, or `--db probe.db` for live hop data. Needs `TOPO_WEB_PASSWORD` to listen beyond loopback. |
+| `topo-mapper probe` | Trace paths to the targets in `targets.yaml` on a schedule and record hop health. `--once` runs a single round. |
+| `topo-mapper probe-snapshot` | Write the latest probe paths as a snapshot file (public IPs masked unless `--no-redact`). |
 
 Key `discover` flags: `--protocol cdp,lldp`, `--enrich`, `--max-devices N`,
 `--keep-domain`, `--inventory FILE`.
@@ -130,25 +132,115 @@ field mapping. Serve it via the Infinity datasource (or the Node Graph API
 datasource) and drop a Node Graph panel on a dashboard in the existing
 homelab Grafana.
 
+## Hop monitor (no CDP/LLDP needed)
+
+A network made of a modem, a router and a few servers has no CDP/LLDP neighbors
+to ask. `topo-mapper probe` instead traces the path to each target on a schedule
+(using [`mtr`](https://github.com/traviscross/mtr)), stores per-hop latency and
+loss in SQLite, and the viewer draws the paths as a topology that updates live.
+
+```bash
+cp targets.example.yaml targets.yaml        # edit: modem address, targets
+topo-mapper probe --targets targets.yaml --db probe.db --once   # try it
+topo-mapper probe --targets targets.yaml --db probe.db          # run forever
+TOPO_WEB_PASSWORD='a-long-random-password' topo-mapper serve --db probe.db
+```
+
+Needs `mtr` on the machine (`apt install mtr-tiny`) and permission to open raw
+ICMP sockets; the Docker image takes care of both.
+
+**What you get**
+
+- A graph of the hops, merged across targets and coloured by real loss: green
+  up, amber loss of 5% or more, red down, grey for hops that never answer.
+- Route-change detection per target, kept in history (`/api/changes`).
+- Per-hop tables at `/api/paths` and Prometheus metrics at `/metrics`.
+
+| Metric | Meaning |
+|---|---|
+| `topo_probe_up{target}` | latest trace reached the target |
+| `topo_probe_run_ok{target}` | the trace itself ran (0 means `mtr` failed, not the network) |
+| `topo_probe_last_run_timestamp_seconds{target}` | for stale-probe alerts |
+| `topo_target_rtt_seconds`, `topo_target_loss_ratio` | final hop |
+| `topo_path_changes_total{target}` | counter of route changes |
+| `topo_hop_rtt_seconds`, `topo_hop_loss_ratio`, `topo_hop_responding` | by `target` and `hop` position |
+| `topo_hop_info{target,hop,host,scope}` | which address sits at each position |
+
+Example Prometheus alert rules:
+
+```yaml
+- alert: TargetUnreachable
+  expr: topo_probe_up == 0
+  for: 5m
+- alert: ProbeStale
+  expr: time() - topo_probe_last_run_timestamp_seconds > 900
+- alert: RouteChanged
+  expr: increase(topo_path_changes_total[1h]) > 0
+- alert: HopLoss
+  expr: topo_hop_loss_ratio > 0.05
+  for: 10m
+```
+
+**Reading loss correctly.** Routers in the middle of a path often rate-limit the
+ICMP replies a trace relies on, so a hop showing 60% loss followed by hops with
+0% is not a problem. The tool reports *effective* loss: the lowest loss at that
+hop or any hop after it. Hops that never answer are shown as unknown, not down.
+Route changes ignore a hop that merely stayed silent; swapping one address for
+another counts. A hop newly inserted into an otherwise identical path is not
+flagged.
+
+**Privacy and security**
+
+- Nothing leaves the machine: hop names are not resolved (`mtr -n`), no
+  AS-number or geolocation lookups, no telemetry, and the viewer loads no
+  third-party scripts (Cytoscape.js is bundled in `web/static/`, MIT licence).
+- Public IP addresses are masked as `pub-xxxxxxxx` (salted HMAC, stable per
+  installation) in the viewer, API, `/metrics` and exports. Private, CGNAT and
+  mesh-VPN addresses stay visible. Set `TOPO_REDACT_PUBLIC=0` to show real
+  addresses. Logs never contain hop addresses.
+- The viewer binds to loopback by default and refuses to listen anywhere else
+  without `TOPO_WEB_PASSWORD` (12+ characters). It uses HTTP Basic auth with
+  constant-time comparison, locks a client out for 5 minutes after 5 failed
+  attempts, sends a strict Content-Security-Policy and other security headers,
+  and has the API docs disabled. Only `/healthz` is open. Basic auth is not
+  encrypted, so reach the viewer over WireGuard/NetBird, an SSH tunnel, or a
+  TLS reverse proxy, and never expose it to the internet.
+- Targets are validated (an IP or hostname that cannot start with `-`), the probe
+  is started with an argument list rather than a shell, and its output is parsed
+  defensively.
+- `probe.db` is created with mode 0600 and pruned after 14 days
+  (`--retention-days`). `targets.yaml`, `.env` and `*.db` are git-ignored: this
+  repository is public, so keep real addresses out of it.
+- In Docker the containers run as a non-root user with a read-only filesystem and
+  all capabilities dropped. Only the probe gets `NET_RAW`. No Docker socket is
+  mounted and the viewer is published on `127.0.0.1` only.
+
 ## Running on a homelab server (Docker Compose)
 
 ```bash
-cp .env.example .env            # fill in TOPO_USERNAME / TOPO_PASSWORD
-cp inventory.example.yaml inventory.yaml   # optional, per-device overrides
+cp targets.example.yaml targets.yaml
+cp .env.example .env            # set TOPO_WEB_PASSWORD (12+ characters)
 docker compose up -d --build
 ```
 
 This starts two services sharing a `topo-data` volume:
 
-- `topo-mapper-discover` — loops `discover --enrich` on an interval
-  (`DISCOVER_INTERVAL_SECONDS` in `docker-compose.yml`, default 15 min) and
-  writes `topology.json` into the volume.
-- `topo-mapper-viewer` — `topo-mapper serve`, reachable at
-  `http://<server>:8000`. It reads the snapshot fresh on every request, so it
-  picks up each new discovery run without a restart.
+- `probe` traces every target in `targets.yaml` on its own interval and records
+  the result.
+- `viewer` serves the dashboard, API and `/metrics` at `http://127.0.0.1:8000`.
+  From another machine use an SSH tunnel (`ssh -L 8000:127.0.0.1:8000 server`) or
+  your VPN. To let a Prometheus container scrape `http://viewer:8000/metrics`,
+  join it to Prometheus's network (see the comments in `docker-compose.yml`) and
+  give Prometheus the same username and password.
 
-If the lab devices are on a subnet the Docker bridge can't reach, switch
-`topo-mapper-discover` to `network_mode: host` in `docker-compose.yml`.
+Because the probe runs in a container, hop 1 is normally the Docker bridge on
+the server, followed by your modem or router.
+
+For managed Cisco gear, `docker compose --profile cdp up -d --build` also starts
+the original CDP/LLDP flow: `discover` loops `discover --enrich` every
+`DISCOVER_INTERVAL_SECONDS` (default 15 min) and `viewer-cdp` serves the result
+at `http://127.0.0.1:8001`. If the lab devices are on a subnet the Docker bridge
+can't reach, switch `discover` to `network_mode: host`.
 
 Once a Grafana/Prometheus stack is back on the server, add a Node Graph panel
 fed by `topo-mapper export --format grafana` (see Visualization above) instead
@@ -183,7 +275,7 @@ walk through the mock connection backend (no network).
 
 ```
 topo_mapper/
-  cli.py            argparse entry point (discover / demo / export / serve)
+  cli.py            argparse entry point (discover / demo / export / serve / probe)
   discovery.py      BFS walk, per-device failure handling
   parsers.py        regex parsers for CDP / LLDP / interface state
   normalize.py      hostname + interface canonicalization
@@ -192,7 +284,8 @@ topo_mapper/
   graph.py          NetworkX graph + JSON snapshot
   connections.py    Netmiko backend + file-backed mock lab
   exporters/        cytoscape / grafana / mermaid / standalone html
-  web/              FastAPI app + Cytoscape.js single-page viewer
+  probes/           hop monitor: targets, mtr runner, SQLite history, metrics, masking
+  web/              FastAPI app (auth, headers) + bundled Cytoscape.js viewer
   demo_lab/         bundled captured output for `topo-mapper demo`
 ```
 
@@ -202,6 +295,7 @@ topo_mapper/
 - Persist snapshots to Postgres for topology history / diffing
 - NAPALM backend option for multi-vendor normalization
 - Concurrent discovery workers
+- Hop monitor: latency/loss history charts in the viewer, merging CDP/LLDP and probed paths in one graph
 
 ## License
 

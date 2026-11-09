@@ -14,6 +14,14 @@ venv/
 # Secrets / local config
 .env
 inventory.yaml
+targets.yaml
+
+# Hop monitor history and exports describe your real network. Never commit them.
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+probe-topology.json
 
 # Local Claude Code config
 CLAUDE.md

@@ -18,7 +18,9 @@ def to_grafana_nodegraph(snapshot: dict) -> dict:
                 "id": dev["name"],
                 "title": dev["label"],
                 "subTitle": dev.get("mgmt_ip") or "",
-                "mainStat": dev.get("role", "unknown"),
+                "mainStat": f'{dev["metrics"]["avg_ms"]} ms'
+                if dev.get("metrics")
+                else dev.get("role", "unknown"),
                 "secondaryStat": (dev.get("platform") or "")[:60],
                 "color": UNREACHABLE_COLOR
                 if failed

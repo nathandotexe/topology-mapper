@@ -89,7 +89,6 @@ def parse_lldp_detail(text: str) -> list[NeighborRecord]:
     return records
 
 
-
 _STATUS_UP = {"connected", "up"}
 _STATUS_DOWN = {
     "notconnect",

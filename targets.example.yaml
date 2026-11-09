@@ -1,0 +1,26 @@
+# Copy to targets.yaml (git-ignored) and edit. Each target is traced with mtr on
+# its own schedule. Hop addresses stay on your machine; public ones are masked in
+# the dashboard, /metrics and exports unless TOPO_REDACT_PUBLIC=0.
+#
+# The probe runs in a container, so hop 1 is usually the Docker bridge on your
+# server, followed by your modem or router.
+
+defaults:
+  interval: 300   # seconds between traces (30 to 86400)
+  count: 10       # probes per hop each time (3 to 30)
+
+targets:
+  # Your modem's LAN address (see its label, or `ip route | grep default`).
+  - name: modem
+    host: 192.168.1.1
+    interval: 60
+
+  # Well-known public resolvers give a stable far-away reference for the ISP path.
+  - name: cloudflare
+    host: 1.1.1.1
+  - name: quad9
+    host: 9.9.9.9
+
+  # A NetBird peer (addresses in 100.64.0.0/10) shows the mesh path.
+  # - name: laptop-netbird
+  #   host: 100.64.0.10

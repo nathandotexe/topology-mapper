@@ -11,3 +11,8 @@ __pycache__/
 inventory.yaml
 topology.json
 tests/
+targets.yaml
+*.db
+*.db-wal
+*.db-shm
+probe-topology.json

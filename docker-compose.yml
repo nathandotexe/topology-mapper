@@ -1,7 +1,77 @@
+# Hop monitor for networks without CDP/LLDP gear.
+#
+#   cp targets.example.yaml targets.yaml     # then edit
+#   cp .env.example .env                     # then set TOPO_WEB_PASSWORD (12+ characters)
+#   docker compose up -d --build
+#
+# probe  : traces paths to your targets on a schedule and records the result
+# viewer : dashboard, JSON API and Prometheus /metrics, published on 127.0.0.1 only
+#
+# CDP/LLDP discovery of managed Cisco gear is still available:
+#   docker compose --profile cdp up -d --build
+
+x-hardened: &hardened
+  build: .
+  image: topo-mapper:latest
+  init: true
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop:
+    - ALL
+  pids_limit: 128
+  mem_limit: 256m
+  logging:
+    driver: json-file
+    options:
+      max-size: "5m"
+      max-file: "3"
+
 services:
-  topo-mapper-discover:
-    build: .
-    image: topo-mapper:latest
+  probe:
+    <<: *hardened
+    command: ["probe", "--targets", "/config/targets.yaml", "--db", "/data/probe.db"]
+    # Raw ICMP sockets are the one privilege tracing needs. Nothing else is granted.
+    cap_add:
+      - NET_RAW
+    volumes:
+      - topo-data:/data
+      - type: bind
+        source: ./targets.yaml
+        target: /config/targets.yaml
+        read_only: true
+        bind:
+          create_host_path: false
+
+  viewer:
+    <<: *hardened
+    depends_on:
+      - probe
+    command: ["serve", "--db", "/data/probe.db", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      TOPO_WEB_USER: ${TOPO_WEB_USER:-admin}
+      TOPO_WEB_PASSWORD: ${TOPO_WEB_PASSWORD:?set TOPO_WEB_PASSWORD in .env (12+ characters)}
+      TOPO_REDACT_PUBLIC: ${TOPO_REDACT_PUBLIC:-1}
+    ports:
+      - "127.0.0.1:8000:8000"
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - topo-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    # To let a Prometheus container scrape http://viewer:8000/metrics, join its network:
+    # networks:
+    #   - default
+    #   - monitoring
+
+  discover:
+    <<: *hardened
+    profiles: ["cdp"]
     entrypoint: ["/bin/sh", "/app/docker/discover-loop.sh"]
     env_file:
       - .env
@@ -13,21 +83,29 @@ services:
       # Uncomment after `cp inventory.example.yaml inventory.yaml`. Leaving this
       # bind mount active with no such file makes Docker create an empty dir.
       # - ./inventory.yaml:/app/inventory.yaml:ro
-    restart: unless-stopped
     # Lab devices usually sit on a different subnet than the docker bridge.
     # If discovery can't reach them, switch to: network_mode: host
 
-  topo-mapper-viewer:
-    build: .
-    image: topo-mapper:latest
+  viewer-cdp:
+    <<: *hardened
+    profiles: ["cdp"]
+    depends_on:
+      - discover
     command: ["serve", "--in", "/data/topology.json", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      TOPO_WEB_USER: ${TOPO_WEB_USER:-admin}
+      TOPO_WEB_PASSWORD: ${TOPO_WEB_PASSWORD:?set TOPO_WEB_PASSWORD in .env (12+ characters)}
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8001:8000"
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - topo-data:/data
-    restart: unless-stopped
-    depends_on:
-      - topo-mapper-discover
 
 volumes:
   topo-data:
+
+# networks:
+#   monitoring:
+#     external: true
+#     name: <the network your Prometheus container is on>

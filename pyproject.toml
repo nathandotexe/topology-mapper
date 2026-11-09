@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "topo-mapper"
-version = "0.1.0"
-description = "Network topology auto-discovery via CDP/LLDP with a graph model and visualization"
+version = "0.2.0"
+description = "Network topology discovery (CDP/LLDP) and hop monitoring with a graph model and visualization"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -29,6 +29,8 @@ include = ["topo_mapper*"]
 [tool.setuptools.package-data]
 "topo_mapper" = [
     "web/static/*.html",
+    "web/static/*.js",
+    "web/static/*.LICENSE",
     "demo_lab/hosts.yaml",
     "demo_lab/*/*.txt",
 ]
